@@ -23,6 +23,13 @@ def fetch_tiktok_video(gc: gspread.Client) -> pd.DataFrame:
         values = ws.get_all_values()
         df_sheet = pd.DataFrame(values[3:], columns=values[2])
         df_sheet = df_sheet.loc[:, ~df_sheet.columns.duplicated()]
+        blank_cols = [
+            c for c in df_sheet.columns
+            if not (isinstance(c, str) and c.strip())
+        ]
+        if blank_cols:
+            print(f"[INGEST] Dropping blank-named columns: {len(blank_cols)}")
+            df_sheet = df_sheet.drop(columns=blank_cols)
         df_sheet["creds"] = os.getenv(env_key)
         df_sheet["sheet_name"] = sheet_name
         frames.append(df_sheet)

@@ -6,28 +6,28 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from src.performa_video.utils.transform_utils import (
-    clean_numeric_columns,
+    # clean_numeric_columns,
     parse_mixed_dates,
     to_snake_case,
 )
 from src.performa_video.utils.minio_client import filter_by_sheet_watermark
 
 
-NUMERIC_COLS = [
-    "VV",
-    "Likes",
-    "Komentar",
-    "Dibagikan",
-    "Pengikut baru",
-    "Klik Video ke LIVE",
-    "Produk Dilihat",
-    "Klik Produk",
-    "Pembeli unik",
-    "Pesanan SKU teratribusi",
-    "Produk yang terjual dari video",
-    "GMV dari video (Rp)",
-    "GPM (Rp)",
-]
+# NUMERIC_COLS = [
+#     "VV",
+#     "Likes",
+#     "Komentar",
+#     "Dibagikan",
+#     "Pengikut baru",
+#     "Klik Video ke LIVE",
+#     "Produk Dilihat",
+#     "Klik Produk",
+#     "Pembeli unik",
+#     "Pesanan SKU teratribusi",
+#     "Produk yang terjual dari video",
+#     "GMV dari video (Rp)",
+#     "GPM (Rp)",
+# ]
 
 def _canon(x):
     import pandas as pd
@@ -46,10 +46,10 @@ def build_bronze_video(
     Output: (df siap di-load ke BRONZE_DB.bronze_live, sheet_max_dates)
     """
     # numeric cleaning
-    tiktok_video_clean1 = clean_numeric_columns(
-        tiktok_video_raw, NUMERIC_COLS, fillna_value=0
-    )
-
+    # tiktok_video_clean1 = clean_numeric_columns(
+    #     tiktok_video_raw, NUMERIC_COLS, fillna_value=0
+    # )
+    tiktok_video_clean1 = tiktok_video_raw.copy()
     # parse tanggal
     tiktok_video_clean1["Tanggal"] = parse_mixed_dates(
         tiktok_video_clean1["Tanggal"], return_date=False

@@ -1,8 +1,8 @@
-MERGE INTO database-sigma.SILVER_DB.silver_tt_video T
+MERGE INTO `database-sigma.Testing.silver_tt_video_aff_internal` T
 USING (
   -- ambil snapshot terbaru per (toko, id_kreator, id_video, tanggal)
   WITH latest_raw AS (
-    SELECT * EXCLUDE(rn) FROM (
+    SELECT * EXCEPT(rn) FROM (
       SELECT b.*,
         ROW_NUMBER() OVER (
           PARTITION BY UPPER(TRIM(b.toko)),
@@ -11,7 +11,7 @@ USING (
                        DATE(b.tanggal)
           ORDER BY b.snapshot_ts DESC, b.run_id DESC
         ) rn
-      FROM database-sigma.BRONZE_DB.bronze_video b
+      FROM `database-sigma.Testing.bronze_video_aff_internal` b
     )
     WHERE rn = 1
   ),
@@ -69,32 +69,34 @@ USING (
   with_hash AS (
     SELECT
       b.*,
-      SHA256(
-        array_to_string([
-          FORMAT_DATE('%F', b.tanggal),
-          b.toko, COALESCE(b.id_kreator,''), COALESCE(b.id_video,''),
-          COALESCE(b.nama_kreator,''), COALESCE(b.informasi_video,''), COALESCE(b.produk,''),
-          CAST(b.waktu AS STRING),
-          CAST(b.vv AS STRING), CAST(b.likes AS STRING), CAST(b.komentar AS STRING), CAST(b.dibagikan AS STRING),
-          CAST(b.pengikut_baru AS STRING), CAST(b.klik_video_ke_live AS STRING),
-          CAST(b.produk_dilihat AS STRING), CAST(b.klik_produk AS STRING),
-          CAST(b.pembeli_unik AS STRING),
-          CAST(b.pesanan_sku_teratribusi AS STRING),
-          CAST(b.pesanan_sku_dari_video AS STRING),
-          CAST(b.pesanan_sku_tidak_langsung_dari_video AS STRING),
-          CAST(b.produk_yang_terjual_melalui_video AS STRING),
-          CAST(b.produk_yang_terjual_dari_video AS STRING),
-          CAST(b.produk_yang_terjual_dari_video_secara_tidak_langsung AS STRING),
-          CAST(b.gmv_dari_video AS STRING),
-          CAST(b.gmv_video AS STRING),
-          CAST(b.gmv_tidak_langsung_dari_video AS STRING),
-          CAST(b.gpm AS STRING),
-          CAST(b.ctr_video AS STRING),
-          CAST(b.ratio_video_ke_live AS STRING),
-          CAST(b.pct_tonton_selesai AS STRING),
-          CAST(b.ctor_pesanan_sku AS STRING),
-          COALESCE(b.diagnosis,'')
-        ], '||')
+      TO_HEX(
+        SHA256(
+          ARRAY_TO_STRING([
+            FORMAT_DATE('%F', b.tanggal),
+            b.toko, COALESCE(b.id_kreator,''), COALESCE(b.id_video,''),
+            COALESCE(b.nama_kreator,''), COALESCE(b.informasi_video,''), COALESCE(b.produk,''),
+            CAST(b.waktu AS STRING),
+            CAST(b.vv AS STRING), CAST(b.likes AS STRING), CAST(b.komentar AS STRING), CAST(b.dibagikan AS STRING),
+            CAST(b.pengikut_baru AS STRING), CAST(b.klik_video_ke_live AS STRING),
+            CAST(b.produk_dilihat AS STRING), CAST(b.klik_produk AS STRING),
+            CAST(b.pembeli_unik AS STRING),
+            CAST(b.pesanan_sku_teratribusi AS STRING),
+            CAST(b.pesanan_sku_dari_video AS STRING),
+            CAST(b.pesanan_sku_tidak_langsung_dari_video AS STRING),
+            CAST(b.produk_yang_terjual_melalui_video AS STRING),
+            CAST(b.produk_yang_terjual_dari_video AS STRING),
+            CAST(b.produk_yang_terjual_dari_video_secara_tidak_langsung AS STRING),
+            CAST(b.gmv_dari_video AS STRING),
+            CAST(b.gmv_video AS STRING),
+            CAST(b.gmv_tidak_langsung_dari_video AS STRING),
+            CAST(b.gpm AS STRING),
+            CAST(b.ctr_video AS STRING),
+            CAST(b.ratio_video_ke_live AS STRING),
+            CAST(b.pct_tonton_selesai AS STRING),
+            CAST(b.ctor_pesanan_sku AS STRING),
+            COALESCE(b.diagnosis,'')
+          ], '||', '')
+        )
       ) AS row_hash_clean
     FROM base b
   )

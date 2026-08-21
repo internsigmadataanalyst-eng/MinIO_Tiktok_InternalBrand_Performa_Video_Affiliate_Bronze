@@ -4,6 +4,90 @@ import duckdb
 import pandas as pd
 
 
+def _strip_to_hex(sql: str) -> str:
+    """Hapus wrapper TO_HEX(...) (sadar tanda kurung seimbang).
+    SHA256() di DuckDB sudah mengembalikan HEX String."""
+    pattern = re.compile(r"\bTO_HEX\s*\(", re.IGNORECASE)
+    while True:
+        m = pattern.search(sql)
+        if not m:
+            return sql
+        open_idx = m.end() - 1
+        depth = 0
+        close_idx = None
+        for i in range(open_idx, len(sql)):
+            if sql[i] == "(":
+                depth += 1
+            elif sql[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    close_idx = i
+                    break
+        if close_idx is None:
+            return sql
+        inner = sql[open_idx + 1 : close_idx]
+        sql = sql[: m.start()] + inner + sql[close_idx + 1 :]
+
+
+def _split_top_level_args(arg_text: str) -> list:
+    """Pecah argumen pada koma level-atas (abaikan koma di dalam kurung/string)."""
+    args, depth, cur, in_str = [], 0, "", False
+    for c in arg_text:
+        if in_str:
+            cur += c
+            if c == "'":
+                in_str = False
+        elif c == "'":
+            in_str = True
+            cur += c
+        elif c in "([":
+            depth += 1
+            cur += c
+        elif c in ")]":
+            depth -= 1
+            cur += c
+        elif c == "," and depth == 0:
+            args.append(cur.strip())
+            cur = ""
+        else:
+            cur += c
+    if cur.strip():
+        args.append(cur.strip())
+    return args
+
+
+def _rewrite_array_to_string(sql: str) -> str:
+    """ARRAY_TO_STRING(list, delim, null_text) BigQuery (3 argumen) ->
+    array_to_string(list_transform(list, x -> coalesce(x, null_text)), delim)
+    karena makro array_to_string DuckDB hanya mendukung 2 argumen."""
+    pattern = re.compile(r"\bARRAY_TO_STRING\s*\(")
+    while True:
+        m = pattern.search(sql)
+        if not m:
+            return sql
+        open_idx = m.end() - 1
+        depth, close_idx = 0, None
+        for i in range(open_idx, len(sql)):
+            if sql[i] == "(":
+                depth += 1
+            elif sql[i] == ")":
+                depth -= 1
+                if depth == 0:
+                    close_idx = i
+                    break
+        if close_idx is None:
+            return sql
+        args = _split_top_level_args(sql[open_idx + 1 : close_idx])
+        if len(args) == 3:
+            replacement = (
+                f"array_to_string(list_transform({args[0]}, "
+                f"x -> coalesce(x, {args[2]})), {args[1]})"
+            )
+        else:
+            replacement = f"array_to_string({', '.join(args)})"
+        sql = sql[: m.start()] + replacement + sql[close_idx + 1 :]
+
+
 def _transpile_bq_to_duckdb(sql_content: str) -> str:
     """Helper untuk merubah sintaks BigQuery SQL agar kompatibel dengan DuckDB di Memory."""
     # 1. Hapus prefix 'database-sigma.' & tanda backtick (`)
@@ -27,20 +111,10 @@ def _transpile_bq_to_duckdb(sql_content: str) -> str:
     sql_executable = re.sub(r"\br(['\"][^'\"]*['\"])", r"\1", sql_executable)
 
     # 5. Hapus TO_HEX() karena SHA256() di DuckDB sudah mengembalikan HEX String
-    sql_executable = re.sub(
-        r"TO_HEX\s*\(\s*(SHA256\([^)]+\))\s*\)",
-        r"\1",
-        sql_executable,
-        flags=re.IGNORECASE,
-    )
+    sql_executable = _strip_to_hex(sql_executable)
 
-    # 6. Ubah ARRAY_TO_STRING BigQuery menjadi array_to_string DuckDB
-    sql_executable = re.sub(
-        r"\bARRAY_TO_STRING\b",
-        "array_to_string",
-        sql_executable,
-        flags=re.IGNORECASE,
-    )
+    # 6. Ubah ARRAY_TO_STRING BigQuery (3 argumen) menjadi bentuk 2 argumen DuckDB
+    sql_executable = _rewrite_array_to_string(sql_executable)
 
     # 7. Ubah INSERT ROW BigQuery menjadi INSERT BY NAME DuckDB (jika ada)
     sql_executable = re.sub(
